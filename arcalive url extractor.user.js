@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         아카라이브 게시글 URL 추출 - 다중 페이지
 // @namespace    http://tampermonkey.net/
-// @version      2025-08-15
+// @version      2.1
 // @description  아카라이브에서 게시글 URL 추출 + 읽음무시 + 이미지글 필터링 + 무제한 페이지 지원
 // @author       kts + mod
 // @match        https://arca.live/b/*
