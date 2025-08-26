@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         아카라이브 게시글 URL 추출 - 다중 페이지
 // @namespace    http://tampermonkey.net/
-// @version      2.1
+// @version      2.2
 // @description  아카라이브에서 게시글 URL 추출 + 읽음무시 + 이미지글 필터링 + 무제한 페이지 지원
 // @author       kts + mod
 // @match        https://arca.live/b/*
@@ -118,7 +118,7 @@
             //미디어 처리
             if (cnt_pass === 2 || cnt_pass === 3) {
                 const hasMediaIcon = $(this)
-                .find("div.vrow-inner div.vrow-top span.vcol.col-title span.title span.media-icon.ion-ios-photos-outline")
+                .find("div.vrow-inner div.vrow-top span.vcol.col-title span.title span.media-icon.ion-ios-photos-outline, div.vrow-inner div.vrow-top span.vcol.col-title span.title span.media-icon.ion-ios-videocam")
                 .length > 0;
                 if (!hasMediaIcon) return true;
 
