@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         아카라이브 게시글 URL 추출 - 다중 페이지
 // @namespace    http://tampermonkey.net/
-// @version      2.2
+// @version      2.1
 // @description  아카라이브에서 게시글 URL 추출 + 읽음무시 + 이미지글 필터링 + 무제한 페이지 지원
 // @author       kts + mod
 // @match        https://arca.live/b/*
@@ -36,7 +36,7 @@
       </select>
     </div>
     <div class='input-group-prepend'>
-      <input type='number' class='form-control form-control-sm page-count' value='1' min='1' style='width:60px;' title='가져올 페이지 수'>
+      <input type='number' class='form-control form-control-sm page-count' value='1' min='0' style='width:60px;' title='가져올 페이지 수'>
     </div>
     <div class='input-group-prepend'>
   <input type='datetime-local' class='form-control form-control-sm end-date' style='width:200px;' title='이 날짜·시간까지 추출'>
@@ -50,6 +50,7 @@
   <div class='sidebar_results'>
     <span>
       <p>읽은글 무시는 이미 읽은 글을 무시하는 옵션이에요.</p>
+      <p>페이지를 0으로 설정하면 이무 모든 페이지에 대해 적용돼요.</p>
       <p>결과화면에서 휠을 굴리면 url을 수동으로 복사할 수 있어요.</p>
       <p>좌클릭으로 목록에서 삭제, 휠클릭으로 새탭에서 링크 열기를 할 수 있어요.</p>
       <p>미디어 관련 옵션은 개념글을 놓쳐요. 념글은 따로 확인해 주세요.</p>
@@ -193,6 +194,12 @@
         // 반복 (while)
         if (targetEndDate) {
             // 날짜·시간 기준 추출 (페이지 수 무시)
+            while (nextUrl) {
+                let fetchTarget = nextUrl;
+                nextUrl = await extractFromDocument(fetchTarget, cnt_pass, baseUrl, targetEndDate);
+            }
+        } else if (pageCount === 0) {
+            // 무제한 페이지 추출 (끝까지)
             while (nextUrl) {
                 let fetchTarget = nextUrl;
                 nextUrl = await extractFromDocument(fetchTarget, cnt_pass, baseUrl, targetEndDate);
