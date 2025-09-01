@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         아카라이브 아카콘 URL 추출 - 다중 페이지
+// @name         아카라이브 아카콘 URL 추출
 // @namespace    http://tampermonkey.net/
 // @version      1.0
 // @description  아카라이브에서 아카콘 URL 추출
