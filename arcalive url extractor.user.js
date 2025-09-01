@@ -198,12 +198,6 @@
                 let fetchTarget = nextUrl;
                 nextUrl = await extractFromDocument(fetchTarget, cnt_pass, baseUrl, targetEndDate);
             }
-        } else if (pageCount === 0) {
-            // 무제한 페이지 추출 (끝까지)
-            while (nextUrl) {
-                let fetchTarget = nextUrl;
-                nextUrl = await extractFromDocument(fetchTarget, cnt_pass, baseUrl, targetEndDate);
-            }
         } else {
             // 페이지 수 기준 추출
             while (nextUrl && idx < perPageCount * pageCount) {
