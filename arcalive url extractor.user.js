@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         아카라이브 게시글 URL 추출
 // @namespace    http://tampermonkey.net/
-// @version      3.9
+// @version      3.9.1
 // @description  아카라이브에서 게시글 URL 추출 + 읽음무시 + 이미지글 필터링 + 무제한 페이지 지원
 // @author       kts + mod
 // @match        https://arca.live/b/*
@@ -11,8 +11,6 @@
 // @updateURL    https://raw.githubusercontent.com/sb03son/tampermonkey-scripts/main/arcalive-url-extractor.user.js
 // @downloadURL  https://raw.githubusercontent.com/sb03son/tampermonkey-scripts/main/arcalive-url-extractor.user.js
 // ==/UserScript==
-
-// 💡 [제거] 더 이상 필요하지 않은 sleep 및 promptForIPChange 함수를 제거했습니다.
 
 (function () {
     'use strict';
@@ -24,6 +22,8 @@
     let isEnd = false;
     let saved_str = "";
     let idx = 0;
+    // 💡 오류로 인해 중단되었는지 여부를 추적하는 플래그
+    let extractionStoppedByError = false; 
 
     const get_url_div = `
 <div class='sidebar-item sidebar_urls'>
@@ -56,6 +56,7 @@
       <p>결과화면에서 휠을 굴리면 url을 수동으로 복사할 수 있어요.</p>
       <p>좌클릭으로 목록에서 삭제, 휠클릭으로 새탭에서 링크 열기를 할 수 있어요.</p>
       <p>미디어 관련 옵션은 개념글을 놓쳐요. 념글은 따로 확인해 주세요.</p>
+      <p>키워드 검색은 많은 게시글 추출이 제한돼요.</p>
     </span>
   </div>
 </div>`;
@@ -83,12 +84,14 @@
                 response = await fetch(fetchUrl);
             } catch (e) {
                 console.error(`[Fatal Error] Network error during fetch: ${e.message}. 수동으로 새로고침 후 재시작하세요.`);
+                extractionStoppedByError = true;
                 return null; // 네트워크 오류 발생 시 즉시 종료
             }
 
-            // 💡 [최종 수정] 429, 403 오류 시 재시도 없이 즉시 종료
+            // 💡 429, 403 오류 시 재시도 없이 즉시 종료
             if (response.status === 429 || response.status === 403) {
                 console.error(`[Fatal Error] HTTP Status ${response.status} received. 서버가 접근을 차단했습니다. 수동으로 해결(CAPTCHA, IP/세션 변경) 후 페이지 새로고침하여 재시작하세요.`);
+                extractionStoppedByError = true;
                 return null; // 429/403 오류 발생 시 즉시 종료
             }
 
@@ -200,6 +203,8 @@
     // 추출 버튼 클릭
     $(document).on("click", "button.sidebar_get_urls", async function () {
         isEnd = false; // 시작 시 false
+        extractionStoppedByError = false; // 플래그 초기화
+        
         const $results = $(".sidebar_results");
         $results.empty();
 
@@ -220,7 +225,7 @@
         currentUrl.searchParams.delete('p');
         const baseUrl = currentUrl.toString().replace(/\/$/, '');
 
-        // 💡 [수정] 추출 로직 전체를 try 블록으로 감싸 isEnd 보장
+        // 💡 추출 로직 전체를 try 블록으로 감싸 isEnd 보장
         try {
             // 현재 페이지부터 추출
             let beforeIdx = idx;
@@ -255,6 +260,13 @@
         } finally {
             // 💡 [필수] 추출 성공/실패 여부에 관계없이 isEnd는 항상 true로 설정됩니다.
             isEnd = true;
+            
+            // 💡 오류로 중단된 경우 진행 상황 표시
+            if (extractionStoppedByError) {
+                const progressMessage = `<p style="color: red; font-weight: bold; margin-bottom: 5px;">⚠️ 추출이 오류로 중단됨: ${idx}개의 링크까지 진행되었습니다. (재시작 필요)</p>`;
+                $results.prepend(progressMessage); // 결과 목록 맨 위에 표시
+            }
+            extractionStoppedByError = false; // 플래그 재설정
         }
     });
 
