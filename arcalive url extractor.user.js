@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         아카라이브 게시글 URL 추출
 // @namespace    http://tampermonkey.net/
-// @version      3.2
+// @version      3.3
 // @description  아카라이브에서 게시글 URL 추출 + 읽음무시 + 이미지글 필터링 + 무제한 페이지 지원
 // @author       kts + mod
 // @match        https://arca.live/b/*
@@ -192,7 +192,6 @@ function sleep(ms) {
         const endDateInput = $('.end-date').val();
         const targetEndDate = endDateInput ? new Date(endDateInput) : null;
 
-        const currentUrl = new URL(location.href);
         currentUrl.searchParams.delete('p');
         const baseUrl = currentUrl.toString().replace(/\/$/, '');
 
