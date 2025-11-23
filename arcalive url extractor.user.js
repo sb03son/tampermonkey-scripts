@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         아카라이브 게시글 URL 추출
 // @namespace    http://tampermonkey.net/
-// @version      3.3
+// @version      3.4
 // @description  아카라이브에서 게시글 URL 추출 + 읽음무시 + 이미지글 필터링 + 무제한 페이지 지원
 // @author       kts + mod
 // @match        https://arca.live/b/*
@@ -78,8 +78,52 @@ function sleep(ms) {
 
         if (typeof docOrUrl === "string") {
             const fetchUrl = docOrUrl;
-            const res = await fetch(fetchUrl);
-            const html = await res.text();
+            
+            // 429 오류 발생 시 재시도 로직 시작
+            let response;
+            let retries = 0;
+            const maxRetries = 5;
+            const initialDelayMs = 5000; // 5초 대기 시작
+
+            while (retries < maxRetries) {
+                console.log(`[Debug] Attempting fetch for: ${fetchUrl} (Attempt ${retries + 1}/${maxRetries})`);
+                try {
+                    response = await fetch(fetchUrl);
+
+                    if (response.status === 429) {
+                        retries++;
+                        const delay = initialDelayMs * retries; // 지수적 대기 (5초, 10초, 15초...)
+                        console.warn(`[Warning] HTTP 429 Too Many Requests received. Waiting for ${delay / 1000} seconds before retrying.`);
+                        await sleep(delay);
+                        continue; // 재시도
+                    }
+
+                    if (!response.ok) {
+                        // 429 외의 다른 오류 처리 (404, 500 등)
+                        console.error(`[Error] HTTP Status ${response.status} received for URL: ${fetchUrl}. Stopping retries for this URL.`);
+                        return null; 
+                    }
+                    
+                    // 성공 (status 200-299)
+                    break; 
+
+                } catch (e) {
+                    // 네트워크 오류 처리
+                    retries++;
+                    const delay = initialDelayMs * retries;
+                    console.error(`[Error] Network error during fetch. Waiting for ${delay / 1000} seconds before retrying. Error: ${e.message}`);
+                    await sleep(delay);
+                    continue; // 재시도
+                }
+            }
+            
+            if (!response || response.status === 429) {
+                console.error(`[Fatal] Failed to fetch URL after ${maxRetries} retries due to persistent 429 or network error.`);
+                return null; // 최종 실패
+            }
+            
+            // 성공적인 응답을 사용하여 HTML 파싱 진행
+            const html = await response.text();
             const parsed = new DOMParser().parseFromString(html, "text/html");
             $doc = $(parsed);
             baseURLObj = new URL(fetchUrl, location.origin);
@@ -87,6 +131,7 @@ function sleep(ms) {
             $doc = $(docOrUrl);
             baseURLObj = baseForResolve ? new URL(baseForResolve, location.origin) : new URL(location.href);
         }
+        // 429 오류 발생 시 재시도 로직 끝
 
         let link_sum = "";
 
@@ -170,6 +215,9 @@ function sleep(ms) {
                  nextHref = new URL(nextLink, baseURLObj).toString();
             }
         }
+        
+        console.log(`[Debug] Total URLs: ${idx} | Next Page URL: ${nextHref}`);
+        
         return nextHref;
 
     }
@@ -182,16 +230,15 @@ function sleep(ms) {
 
         idx = 0;
         saved_str = "";
-        seenUrls.clear();
-        const currentUrl = new URL(location.href);
-        const isKeywordSearch = currentUrl.searchParams.has('keyword');
-        const delayTime = isKeywordSearch ? 1500 : 0;
+        seenUrls.clear();        
         let cnt_pass = Number($(this).closest('.input-group').find('select[name=target]').val()) || 0;
-        let pageCount = Number($('.page-count').val());        
+        let pageCount = Number($('.page-count').val());
         pageCount = (pageCount === 0) ? 0 : (pageCount || 1);
+
         const endDateInput = $('.end-date').val();
         const targetEndDate = endDateInput ? new Date(endDateInput) : null;
 
+        const currentUrl = new URL(location.href);
         currentUrl.searchParams.delete('p');
         const baseUrl = currentUrl.toString().replace(/\/$/, '');
 
@@ -206,7 +253,6 @@ function sleep(ms) {
             while (nextUrl) {
                 let fetchTarget = nextUrl;
                 nextUrl = await extractFromDocument(fetchTarget, cnt_pass, baseUrl, targetEndDate);
-                await sleep(delayTime);
             }
         } else {
             // 페이지 수 기준 추출
@@ -215,14 +261,12 @@ function sleep(ms) {
                 while (nextUrl) {
                     let fetchTarget = nextUrl;
                     nextUrl = await extractFromDocument(fetchTarget, cnt_pass, baseUrl, targetEndDate);
-                    await sleep(delayTime);
                 }
             } else {
                 // 지정된 페이지 수까지 추출 (pageCount가 1 이상일 때)
                 while (nextUrl && idx < perPageCount * pageCount) {
                     let fetchTarget = nextUrl;
                     nextUrl = await extractFromDocument(fetchTarget, cnt_pass, baseUrl, targetEndDate);
-                    await sleep(delayTime);
                 }
             }
         }
