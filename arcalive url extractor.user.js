@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         아카라이브 게시글 URL 추출
 // @namespace    http://tampermonkey.net/
-// @version      3.7
+// @version      3.9
 // @description  아카라이브에서 게시글 URL 추출 + 읽음무시 + 이미지글 필터링 + 무제한 페이지 지원
 // @author       kts + mod
 // @match        https://arca.live/b/*
@@ -12,9 +12,7 @@
 // @downloadURL  https://raw.githubusercontent.com/sb03son/tampermonkey-scripts/main/arcalive-url-extractor.user.js
 // ==/UserScript==
 
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
+// 💡 [제거] 더 이상 필요하지 않은 sleep 및 promptForIPChange 함수를 제거했습니다.
 
 (function () {
     'use strict';
@@ -76,70 +74,28 @@ function sleep(ms) {
         let $doc;
         let baseURLObj;
 
-        // arcalive url extractor.user.js (extractFromDocument 함수 내부)
-
-// ... (약 188행 근처)
-
-        if (typeof docOrUrl === "string") {
-            const fetchUrl = docOrUrl;
-            
-            // 429 오류 발생 시 재시도 로직 시작
-            let response;
-            let retries = 0;
-            const maxRetries = 5;
-            // 💡 [추가] 초기 대기 시간을 60초로 설정하여 테스트합니다.
-            const initialDelayMs = 60000; 
-
-            while (retries < maxRetries) {
-                console.log(`[Debug] Attempting fetch for: ${fetchUrl} (Attempt ${retries + 1}/${maxRetries})`);
-                try {
-                    response = await fetch(fetchUrl);
-
-                    if (response.status === 429) {
-                        retries++;
-                        
-                        // 💡 [복원] 시간 대기 로직
-                        const delay = initialDelayMs * retries; // 지수적 대기 (60초, 120초...)
-                        console.warn(`[Warning] HTTP 429 Too Many Requests received. Waiting for ${delay / 1000} seconds before retrying.`);
-                        await sleep(delay);
-                        
-                        continue; // 재시도
-                    }
-                    
-                    if (response.status === 403) {
-                        // 403은 세션 문제이므로 재시도해도 풀리지 않음. 바로 종료.
-                        console.error(`[Error] HTTP Status 403 Forbidden received. Extraction stopped. (Possible session/IP change issue)`);
-                        return null;
-                    }
-
-                    if (!response.ok) {
-                        // 429/403 외의 다른 오류 처리 
-                        console.error(`[Error] HTTP Status ${response.status} received for URL: ${fetchUrl}. Stopping retries for this URL.`);
-                        return null;
-                    }
-                    
-                    // 성공 (status 200-299)
-                    break; 
-
-                } catch (e) {
-                    // 💡 [복원] 네트워크 오류 발생 시 시간 대기 로직
-                    retries++;
-                    const delay = initialDelayMs * retries;
-                    console.error(`[Error] Network error during fetch. Waiting for ${delay / 1000} seconds before retrying. Error: ${e.message}`);
-                    await sleep(delay);
-                    continue; // 재시도
-                }
-            }
-            
-            if (!response || response.status === 429) {
-                console.error(`[Fatal] Failed to fetch URL after ${maxRetries} retries due to persistent 429 or network error.`);
-                return null; // 최종 실패
-            }
-            // ... (나머지 로직은 그대로)
+        if (typeof docOrUrl === "string") {
+            const fetchUrl = docOrUrl;
             
-            if (!response || response.status === 429) {
-                console.error(`[Fatal] Failed to fetch URL after ${maxRetries} retries due to persistent 429 or network error.`);
-                return null; // 최종 실패
+            let response;
+            try {
+                // 단순 fetch 요청
+                response = await fetch(fetchUrl);
+            } catch (e) {
+                console.error(`[Fatal Error] Network error during fetch: ${e.message}. 수동으로 새로고침 후 재시작하세요.`);
+                return null; // 네트워크 오류 발생 시 즉시 종료
+            }
+
+            // 💡 [최종 수정] 429, 403 오류 시 재시도 없이 즉시 종료
+            if (response.status === 429 || response.status === 403) {
+                console.error(`[Fatal Error] HTTP Status ${response.status} received. 서버가 접근을 차단했습니다. 수동으로 해결(CAPTCHA, IP/세션 변경) 후 페이지 새로고침하여 재시작하세요.`);
+                return null; // 429/403 오류 발생 시 즉시 종료
+            }
+
+            if (!response.ok) {
+                // 500, 404 등 다른 오류 처리
+                console.error(`[Error] HTTP Status ${response.status} received for URL: ${fetchUrl}. 추출을 중단합니다.`);
+                return null;
             }
             
             // 성공적인 응답을 사용하여 HTML 파싱 진행
@@ -151,7 +107,6 @@ function sleep(ms) {
             $doc = $(docOrUrl);
             baseURLObj = baseForResolve ? new URL(baseForResolve, location.origin) : new URL(location.href);
         }
-        // 429 오류 발생 시 재시도 로직 끝
 
         let link_sum = "";
 
@@ -244,14 +199,17 @@ function sleep(ms) {
 
     // 추출 버튼 클릭
     $(document).on("click", "button.sidebar_get_urls", async function () {
-        isEnd = false;
+        isEnd = false; // 시작 시 false
         const $results = $(".sidebar_results");
         $results.empty();
 
         idx = 0;
         saved_str = "";
-        seenUrls.clear();        
+        seenUrls.clear();
+        
         let cnt_pass = Number($(this).closest('.input-group').find('select[name=target]').val()) || 0;
+        
+        // 페이지 카운트 로직 (0:무한, ""/유효하지 않은 값:1)
         let pageCount = Number($('.page-count').val());
         pageCount = (pageCount === 0) ? 0 : (pageCount || 1);
 
@@ -262,41 +220,48 @@ function sleep(ms) {
         currentUrl.searchParams.delete('p');
         const baseUrl = currentUrl.toString().replace(/\/$/, '');
 
-        // 현재 페이지부터 추출
-        let beforeIdx = idx;
-        let nextUrl = await extractFromDocument(document, cnt_pass, baseUrl, targetEndDate);
-        let perPageCount = idx - beforeIdx; // 첫 페이지 글 수
+        // 💡 [수정] 추출 로직 전체를 try 블록으로 감싸 isEnd 보장
+        try {
+            // 현재 페이지부터 추출
+            let beforeIdx = idx;
+            let nextUrl = await extractFromDocument(document, cnt_pass, baseUrl, targetEndDate);
+            let perPageCount = idx - beforeIdx; // 첫 페이지 글 수
 
-        // 반복 (while)
-        if (targetEndDate) {
-            // 날짜·시간 기준 추출 (페이지 수 무시)
-            while (nextUrl) {
-                let fetchTarget = nextUrl;
-                nextUrl = await extractFromDocument(fetchTarget, cnt_pass, baseUrl, targetEndDate);
-            }
-        } else {
-            // 페이지 수 기준 추출
-            if (pageCount === 0) {
-                // 무제한 페이지 추출 (pageCount가 0일 때)
+            // 반복 (while)
+            if (targetEndDate) {
+                // 날짜·시간 기준 추출 (페이지 수 무시)
                 while (nextUrl) {
                     let fetchTarget = nextUrl;
                     nextUrl = await extractFromDocument(fetchTarget, cnt_pass, baseUrl, targetEndDate);
                 }
             } else {
-                // 지정된 페이지 수까지 추출 (pageCount가 1 이상일 때)
-                while (nextUrl && idx < perPageCount * pageCount) {
-                    let fetchTarget = nextUrl;
-                    nextUrl = await extractFromDocument(fetchTarget, cnt_pass, baseUrl, targetEndDate);
+                // 페이지 수 기준 추출
+                if (pageCount === 0) {
+                    // 무제한 페이지 추출 (pageCount가 0일 때)
+                    while (nextUrl) {
+                        let fetchTarget = nextUrl;
+                        nextUrl = await extractFromDocument(fetchTarget, cnt_pass, baseUrl, targetEndDate);
+                    }
+                } else {
+                    // 지정된 페이지 수까지 추출 (pageCount가 1 이상일 때)
+                    while (nextUrl && idx < perPageCount * pageCount) {
+                        let fetchTarget = nextUrl;
+                        nextUrl = await extractFromDocument(fetchTarget, cnt_pass, baseUrl, targetEndDate);
+                    }
                 }
             }
+        } catch(e) {
+            console.error("Extraction process stopped unexpectedly:", e);
+        } finally {
+            // 💡 [필수] 추출 성공/실패 여부에 관계없이 isEnd는 항상 true로 설정됩니다.
+            isEnd = true;
         }
-
-    isEnd = true;
-});
+    });
 
     // 복사 버튼
     $(document).on("click", "button.sidebar_copy_urls", function () {
-        if (isEnd && saved_str.trim() !== "") {
+        // 💡 [수정] isEnd 조건 제거. 내용만 있으면 복사 허용
+        if (saved_str.trim() !== "") {
             navigator.clipboard.writeText(saved_str);
             console.log("복사됨:", saved_str);
         } else {
@@ -306,6 +271,7 @@ function sleep(ms) {
 
     // 휠 스크롤로 제목↔URL 전환
     $(document).on("wheel", ".sidebar_results", function () {
+        // isEnd 조건 유지 (안정성 보장)
         if (isEnd) {
             let temp_str = $(".sidebar_results").html();
             $(".sidebar_results").html(saved_str);
