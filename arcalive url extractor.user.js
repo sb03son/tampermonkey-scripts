@@ -12,6 +12,10 @@
 // @downloadURL  https://raw.githubusercontent.com/sb03son/tampermonkey-scripts/main/arcalive-url-extractor.user.js
 // ==/UserScript==
 
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 (function () {
     'use strict';
     /* globals $ */
@@ -179,6 +183,9 @@
         idx = 0;
         saved_str = "";
         seenUrls.clear();
+        const currentUrl = new URL(location.href);
+        const isKeywordSearch = currentUrl.searchParams.has('keyword');
+        const delayTime = isKeywordSearch ? 1500 : 0;
         let cnt_pass = Number($(this).closest('.input-group').find('select[name=target]').val()) || 0;
         let pageCount = Number($('.page-count').val());        
         pageCount = (pageCount === 0) ? 0 : (pageCount || 1);
@@ -200,6 +207,7 @@
             while (nextUrl) {
                 let fetchTarget = nextUrl;
                 nextUrl = await extractFromDocument(fetchTarget, cnt_pass, baseUrl, targetEndDate);
+                await sleep(delayTime);
             }
         } else {
             // 페이지 수 기준 추출
@@ -208,12 +216,14 @@
                 while (nextUrl) {
                     let fetchTarget = nextUrl;
                     nextUrl = await extractFromDocument(fetchTarget, cnt_pass, baseUrl, targetEndDate);
+                    await sleep(delayTime);
                 }
             } else {
                 // 지정된 페이지 수까지 추출 (pageCount가 1 이상일 때)
                 while (nextUrl && idx < perPageCount * pageCount) {
                     let fetchTarget = nextUrl;
                     nextUrl = await extractFromDocument(fetchTarget, cnt_pass, baseUrl, targetEndDate);
+                    await sleep(delayTime);
                 }
             }
         }
