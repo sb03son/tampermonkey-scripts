@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         아카라이브 게시글 URL 추출
 // @namespace    http://tampermonkey.net/
-// @version      3.5
+// @version      3.6
 // @description  아카라이브에서 게시글 URL 추출 + 읽음무시 + 이미지글 필터링 + 무제한 페이지 지원
 // @author       kts + mod
 // @match        https://arca.live/b/*
@@ -130,11 +130,19 @@ function promptForIPChange() {
                     break; 
 
                 } catch (e) {
-                    // 네트워크 오류 발생 시에는 잠시 대기
+                    // 💡 [수정] 네트워크 오류 발생 시에도 IP 변경 프롬프트 호출로 대체
                     retries++;
-                    const delay = 5000 * retries; // 네트워크 오류 시에만 5초 대기 후 재시도
-                    console.error(`[Error] Network error during fetch. Waiting for ${delay / 1000} seconds before retrying. Error: ${e.message}`);
-                    await sleep(delay);
+                    // const delay = 5000 * retries; // 이 줄을 제거했습니다.
+                    console.error(`[Error] Network error during fetch. Prompting user for manual intervention. Error: ${e.message}`);
+                    
+                    try {
+                        await promptForIPChange(); // IP 변경 프롬프트 호출
+                    } catch (e) {
+                        console.error(e.message);
+                        return null; // 사용자가 취소했으므로 추출 중지
+                    }
+                    
+                    // await sleep(delay); // 이 줄을 제거했습니다.
                     continue; // 재시도
                 }
             }
