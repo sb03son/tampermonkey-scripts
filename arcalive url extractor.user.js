@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         아카라이브 게시글 URL 추출
 // @namespace    http://tampermonkey.net/
-// @version      3.4
+// @version      3.5
 // @description  아카라이브에서 게시글 URL 추출 + 읽음무시 + 이미지글 필터링 + 무제한 페이지 지원
 // @author       kts + mod
 // @match        https://arca.live/b/*
@@ -14,6 +14,20 @@
 
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function promptForIPChange() {
+    return new Promise((resolve, reject) => {
+        const message = "🚨 Rate Limit Block (HTTP 429) 🚨\n\n아카라이브 서버가 현재 IP 주소를 차단했습니다.\n\n추출을 재개하려면 다음 단계를 수행해 주세요:\n\n1. VPN, 프록시, 또는 모바일 핫스팟 연결을 변경하여 공인 IP 주소를 바꿉니다.\n2. **[확인] 버튼을 누르기 전에 새로운 IP 주소로 연결이 완료되었는지 확인하세요.**";
+        
+        // window.confirm은 브라우저를 블로킹하여 사용자의 행동을 기다립니다.
+        if (window.confirm(message)) {
+            resolve();
+        } else {
+            // 사용자가 취소(Cancel)를 누르면 추출을 중지합니다.
+            reject(new Error("User manually stopped extraction."));
+        }
+    });
 }
 
 (function () {
@@ -83,7 +97,7 @@ function sleep(ms) {
             let response;
             let retries = 0;
             const maxRetries = 5;
-            const initialDelayMs = 5000; // 5초 대기 시작
+            // const initialDelayMs = 5000; 
 
             while (retries < maxRetries) {
                 console.log(`[Debug] Attempting fetch for: ${fetchUrl} (Attempt ${retries + 1}/${maxRetries})`);
@@ -92,25 +106,33 @@ function sleep(ms) {
 
                     if (response.status === 429) {
                         retries++;
-                        const delay = initialDelayMs * retries; // 지수적 대기 (5초, 10초, 15초...)
-                        console.warn(`[Warning] HTTP 429 Too Many Requests received. Waiting for ${delay / 1000} seconds before retrying.`);
-                        await sleep(delay);
-                        continue; // 재시도
+                        
+                        console.warn(`[Warning] HTTP 429 Too Many Requests received. Prompting user to change IP.`);
+                        
+                        // 💡 [수정] 대기 시간 대신 사용자 프롬프트 호출 및 취소 처리
+                        try {
+                            await promptForIPChange();
+                        } catch (e) {
+                            console.error(e.message);
+                            return null; // 사용자가 취소했으므로 추출 중지
+                        }
+                        
+                        continue; // 사용자 확인 후 재시도
                     }
 
                     if (!response.ok) {
-                        // 429 외의 다른 오류 처리 (404, 500 등)
+                        // 429 외의 다른 오류 처리 
                         console.error(`[Error] HTTP Status ${response.status} received for URL: ${fetchUrl}. Stopping retries for this URL.`);
-                        return null; 
+                        return null;
                     }
                     
                     // 성공 (status 200-299)
                     break; 
 
                 } catch (e) {
-                    // 네트워크 오류 처리
+                    // 네트워크 오류 발생 시에는 잠시 대기
                     retries++;
-                    const delay = initialDelayMs * retries;
+                    const delay = 5000 * retries; // 네트워크 오류 시에만 5초 대기 후 재시도
                     console.error(`[Error] Network error during fetch. Waiting for ${delay / 1000} seconds before retrying. Error: ${e.message}`);
                     await sleep(delay);
                     continue; // 재시도
