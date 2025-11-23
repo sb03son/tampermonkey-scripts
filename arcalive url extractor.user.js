@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         아카라이브 게시글 URL 추출 (Fix)
+// @name         아카라이브 게시글 URL 추출
 // @namespace    http://tampermonkey.net/
 // @version      3.1
 // @description  아카라이브에서 게시글 URL 추출 + 읽음무시 + 이미지글 필터링 + 무제한 페이지 지원 (버그 수정판)
