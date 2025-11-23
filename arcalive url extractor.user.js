@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         아카라이브 게시글 URL 추출
 // @namespace    http://tampermonkey.net/
-// @version      3.0
+// @version      3.1
 // @description  아카라이브에서 게시글 URL 추출 + 읽음무시 + 이미지글 필터링 + 무제한 페이지 지원
 // @author       kts + mod
 // @match        https://arca.live/b/*
@@ -172,13 +172,16 @@
 
     // 추출 버튼 클릭
     $(document).on("click", "button.sidebar_get_urls", async function () {
+        isEnd = false;
         const $results = $(".sidebar_results");
         $results.empty();
 
         idx = 0;
         saved_str = "";
+        seenUrls.clear();
         let cnt_pass = Number($(this).closest('.input-group').find('select[name=target]').val()) || 0;
-        let pageCount = Number($('.page-count').val()) || 1;
+        let pageCount = Number($('.page-count').val());        
+        pageCount = (pageCount === 0) ? 0 : (pageCount || 1);
         const endDateInput = $('.end-date').val();
         const targetEndDate = endDateInput ? new Date(endDateInput) : null;
 
@@ -200,9 +203,18 @@
             }
         } else {
             // 페이지 수 기준 추출
-            while (nextUrl && idx < perPageCount * pageCount) {
-                let fetchTarget = nextUrl;
-                nextUrl = await extractFromDocument(fetchTarget, cnt_pass, baseUrl, targetEndDate);
+            if (pageCount === 0) {
+                // 무제한 페이지 추출 (pageCount가 0일 때)
+                while (nextUrl) {
+                    let fetchTarget = nextUrl;
+                    nextUrl = await extractFromDocument(fetchTarget, cnt_pass, baseUrl, targetEndDate);
+                }
+            } else {
+                // 지정된 페이지 수까지 추출 (pageCount가 1 이상일 때)
+                while (nextUrl && idx < perPageCount * pageCount) {
+                    let fetchTarget = nextUrl;
+                    nextUrl = await extractFromDocument(fetchTarget, cnt_pass, baseUrl, targetEndDate);
+                }
             }
         }
 
